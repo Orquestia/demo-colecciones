@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catálogo de colecciones · Opción 1</title>
+<link rel="stylesheet" href="/estilos.css">
+</head>
+<body>
+<div id="app"></div>
+<script>
+  const fecha = s => s ? new Date(s).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+  let baseInicial = "";
+  window.TIENDA = {
+    api: "/api/op1/catalogo",
+    opcion: "Opción 1 · MCP",
+    aviso: "<b>Se actualiza sola</b> cada 3 días con lo nuevo de los proveedores",
+    pie: "Demo Orquestia · Opción 1 · catálogo mantenido por un servidor MCP conectado a Claude",
+    campoFecha: "publicado_en_fuente",
+    // Nuevo: publicado por la fuente en los últimos 14 días, o visto por primera vez después de la carga inicial
+    esNuevo: p => (p.publicado_en_fuente || "") >= new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10)
+      || ((p.primera_vez || "") > baseInicial && (p.primera_vez || "") >= new Date(Date.now() - 3 * 864e5).toISOString()),
+    alCargar: (d, ps) => {
+      baseInicial = ps.reduce((m, p) => (p.primera_vez && p.primera_vez < m ? p.primera_vez : m), "9999");
+      const c = d.ultima_corrida;
+      document.getElementById("pie").innerHTML += `<br>Última actualización: ${fecha(c && c.fecha)} · Próxima automática: ${fecha(d.programacion.proxima)}`;
+    },
+    heroDetalle: d => `actualizado ${fecha(d.ultima_corrida && d.ultima_corrida.fecha)}`,
+  };
+</script>
+<script src="/tienda.js"></script>
+</body>
+</html>

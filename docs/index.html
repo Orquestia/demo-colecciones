@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+<script>
+/* Versión publicada (estática) de la demo: las lecturas salen de api/*.json y las acciones se desactivan. */
+(function () {
+  const BASE = "/demo-colecciones", FECHA = "11/11/2026";
+  const original = window.fetch.bind(window);
+  const AVISO = "En la versión publicada esta acción está desactivada: necesita el servidor de la demo (python3 servidor.py).";
+  window.fetch = function (url, op) {
+    if (typeof url === "string" && url.startsWith("/api/")) {
+      if (op && op.method && op.method !== "GET")
+        return Promise.resolve(new Response(JSON.stringify({ error: AVISO }), { status: 400, headers: { "Content-Type": "application/json" } }));
+      const u = new URL(url, location.origin);
+      let ruta = u.pathname.replace(/^\/api\//, "");
+      if (ruta === "op2/dashboard") ruta += "-" + (u.searchParams.get("proveedor") || "todos") + "-" + (u.searchParams.get("dias") || "7");
+      return original(BASE + "/api/" + ruta + ".json");
+    }
+    return original(url, op);
+  };
+  // Los botones que escriben se interceptan antes que su propio manejador.
+  window.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest("#actualizar, #act1, #p-probar, [data-prov]");
+    if (!b) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    aviso(AVISO);
+  }, true);
+  function aviso(texto) {
+    let t = document.getElementById("aviso-estatico");
+    if (!t) { t = document.createElement("div"); t.id = "aviso-estatico"; document.body.append(t); }
+    t.textContent = texto; t.className = "visible";
+    clearTimeout(t._t); t._t = setTimeout(() => t.className = "", 4000);
+  }
+  document.addEventListener("DOMContentLoaded", () => {
+    const cinta = document.createElement("div");
+    cinta.id = "cinta-estatica";
+    cinta.textContent = "Versión publicada de la demo · datos congelados el " + FECHA + " · leer fuentes, actualizar y agregar proveedores requiere el servidor";
+    document.body.prepend(cinta);
+  });
+  const css = document.createElement("style");
+  css.textContent = "#cinta-estatica{background:#000;color:#fff;text-align:center;font:11px/1.4 system-ui,sans-serif;letter-spacing:.04em;padding:6px 12px}" +
+    "#aviso-estatico{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:min(560px,calc(100% - 32px));background:#000;color:#fff;" +
+    "font:12px/1.4 system-ui,sans-serif;padding:12px 16px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:99}#aviso-estatico.visible{opacity:1}";
+  document.head.append(css);
+})();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo de colecciones · Dos opciones</title>
+<link rel="stylesheet" href="/demo-colecciones/estilos.css">
+<style>
+  .intro { max-width: 1100px; margin: 0 auto; padding: 48px 32px 8px; text-align: center; }
+  .intro p { color: var(--muted); max-width: 640px; margin: 14px auto 0; font-size: 14px; }
+  .caminos { max-width: 1100px; margin: 0 auto; padding: 32px 32px 80px; display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .camino { border: 1px solid #000; display: flex; flex-direction: column; }
+  .camino .cab { background: #000; color: #fff; padding: 28px 28px 24px; }
+  .camino .cab small { font-size: 11px; letter-spacing: .3em; text-transform: uppercase; opacity: .7; }
+  .camino .cab h2 { font-size: 26px; font-weight: 300; letter-spacing: .08em; margin: 10px 0 6px; text-transform: uppercase; }
+  .camino .cab p { margin: 0; font-size: 13px; opacity: .8; }
+  .camino .cuerpo { padding: 24px 28px 28px; display: flex; flex-direction: column; gap: 18px; flex: 1; }
+  .pasos { margin: 0; padding: 0; list-style: none; counter-reset: p; }
+  .pasos li { counter-increment: p; padding: 0 0 10px 32px; position: relative; font-size: 13px; }
+  .pasos li::before { content: counter(p); position: absolute; left: 0; top: -1px; width: 20px; height: 20px; border: 1px solid #000; border-radius: 50%; font-size: 11px; display: grid; place-items: center; }
+  .datos { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); }
+  .datos div { padding: 12px 14px; border-right: 1px solid var(--line); }
+  .datos div:last-child { border-right: 0; }
+  .datos b { display: block; font-size: 22px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .datos span { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .claude { background: var(--soft); padding: 14px 16px; font-size: 12px; }
+  .claude b { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+  .claude q { display: block; margin-top: 6px; font-style: italic; quotes: "«" "»"; }
+  .botones { display: flex; gap: 10px; flex-wrap: wrap; margin-top: auto; }
+  .nota-sim { font-size: 11px; color: var(--muted); }
+  .camino { min-width: 0; }
+  @media (max-width: 860px) { .caminos { grid-template-columns: 1fr; padding: 24px 16px 64px; } .intro { padding: 32px 16px 0; } .intro h1 { font-size: 22px !important; }
+    .camino .cab, .camino .cuerpo { padding-left: 18px; padding-right: 18px; } .camino .cab h2 { font-size: 20px; } .datos b { font-size: 16px; } .datos div { padding: 10px; } }
+</style>
+</head>
+<body>
+<div class="aviso"><b>Demo Orquestia</b> · Catálogo de colecciones para Juan Camilo Estrada Quintero</div>
+<div class="top"><div class="top-in"><a class="marca" href="/demo-colecciones/">Vitrina<small>Dos opciones</small></a><nav class="nav"></nav></div></div>
+
+<div class="intro">
+  <h1 class="up" style="font-weight:300;font-size:30px;letter-spacing:.12em;margin:0">Un catálogo al día, dos caminos</h1>
+  <p>Las dos opciones leen las mismas fuentes reales (Privilex, Designer Room, Clothing Girl y dos carpetas de Drive) y ordenan los productos con la misma lista de categorías. Cambia quién lo opera y hasta dónde puede crecer.</p>
+</div>
+
+<div class="caminos">
+  <article class="camino">
+    <div class="cab"><small>Opción 1</small><h2>Catálogo con MCP</h2><p>Claude mantiene el catálogo al día. Camilo solo comparte el enlace.</p></div>
+    <div class="cuerpo">
+      <ol class="pasos">
+        <li>Un servidor MCP lee las cinco fuentes cada 3 días, sin intervención.</li>
+        <li>Cada producto queda en la lista común de categorías.</li>
+        <li>Todo lo leído se publica en la vitrina, ordenado por categoría.</li>
+        <li>Desde Claude se consulta, se busca o se pide una actualización.</li>
+      </ol>
+      <div class="datos" id="d1"><div><b>—</b><span>productos</span></div><div><b>—</b><span>categorías</span></div><div><b>—</b><span>próxima actualización</span></div></div>
+      <div class="claude"><b>Así se le habla a Claude</b>
+        <q>Actualiza el catálogo</q><q>¿Qué llegó esta semana de Privilex?</q><q>Muéstrame bolsos por debajo de 3 millones</q><q>Dame el enlace del catálogo para un cliente</q></div>
+      <div class="botones"><a class="btn btn-primary" href="/demo-colecciones/opcion-1/">Ver catálogo</a><button class="btn" id="act1">Actualizar ahora</button></div>
+      <span class="nota-sim" id="n1"></span>
+    </div>
+  </article>
+
+  <article class="camino">
+    <div class="cab"><small>Opción 2</small><h2>Plataforma central</h2><p>Agentes en paralelo, categoría y marca con IA, publicación automática y base para crecer.</p></div>
+    <div class="cuerpo">
+      <ol class="pasos">
+        <li>Un botón lanza un agente por proveedor, todos al mismo tiempo.</li>
+        <li>Las reglas y un modelo de lenguaje completan categoría y marca.</li>
+        <li>Se publica solo lo que tiene precio, foto y categoría.</li>
+        <li>Camilo agrega proveedores nuevos desde la plataforma.</li>
+      </ol>
+      <div class="datos" id="d2"><div><b>—</b><span>publicados</span></div><div><b>—</b><span>retenidos</span></div><div><b>—</b><span>proveedores</span></div></div>
+      <div class="claude"><b>Listo para crecer</b><q style="font-style:normal">Sobre el mismo núcleo se suman contabilidad, CRM e inventario (fase 2).</q></div>
+      <div class="botones"><a class="btn btn-primary" href="/demo-colecciones/opcion-2/plataforma.html">Entrar a la plataforma</a><a class="btn" href="/demo-colecciones/opcion-2/">Ver catálogo</a></div>
+      <span class="nota-sim">En esta demo el núcleo es simulado; en producción es Odoo 18 en Google Cloud.</span>
+    </div>
+  </article>
+</div>
+<footer class="pie">Demo Orquestia · orquestia.io</footer>
+<script>
+(async function () {
+  const num = n => (n || 0).toLocaleString("es-CO");
+  const fecha = s => s ? new Date(s).toLocaleDateString("es-CO", { day: "numeric", month: "short" }) : "—";
+  const pintar1 = d => {
+    const cats = new Set(d.productos.map(p => p.categoria).filter(Boolean));
+    document.getElementById("d1").innerHTML = `<div><b>${num(d.productos.length)}</b><span>productos</span></div><div><b>${cats.size}</b><span>categorías</span></div><div><b>${fecha(d.programacion.proxima)}</b><span>próxima actualización</span></div>`;
+    const a = d.actualizando || {};
+    document.getElementById("n1").textContent = a.activo ? "Actualizando las cinco fuentes en paralelo…" :
+      d.ultima_corrida ? `Última actualización: ${new Date(d.ultima_corrida.fecha).toLocaleString("es-CO")}` : "";
+    document.getElementById("act1").disabled = !!a.activo;
+    return a.activo;
+  };
+  const d1 = await (await fetch("/api/op1/catalogo")).json();
+  pintar1(d1);
+  const t = await (await fetch("/api/op2/tablero")).json();
+  document.getElementById("d2").innerHTML = `<div><b>${num(t.estados.publicado)}</b><span>publicados</span></div><div><b>${num(t.estados.retenido)}</b><span>retenidos</span></div><div><b>${t.proveedores.filter(p => p.activo).length}</b><span>proveedores</span></div>`;
+  document.getElementById("act1").onclick = async () => {
+    await fetch("/api/op1/actualizar", { method: "POST" });
+    const id = setInterval(async () => { if (!pintar1(await (await fetch("/api/op1/catalogo")).json())) clearInterval(id); }, 3000);
+    pintar1({ ...d1, actualizando: { activo: true } });
+  };
+})();
+</script>
+</body>
+</html>

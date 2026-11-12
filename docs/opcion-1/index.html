@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+<script>
+/* Versión publicada (estática) de la demo: las lecturas salen de api/*.json y las acciones se desactivan. */
+(function () {
+  const BASE = "/demo-colecciones", FECHA = "11/11/2026";
+  const original = window.fetch.bind(window);
+  const AVISO = "En la versión publicada esta acción está desactivada: necesita el servidor de la demo (python3 servidor.py).";
+  window.fetch = function (url, op) {
+    if (typeof url === "string" && url.startsWith("/api/")) {
+      if (op && op.method && op.method !== "GET")
+        return Promise.resolve(new Response(JSON.stringify({ error: AVISO }), { status: 400, headers: { "Content-Type": "application/json" } }));
+      const u = new URL(url, location.origin);
+      let ruta = u.pathname.replace(/^\/api\//, "");
+      if (ruta === "op2/dashboard") ruta += "-" + (u.searchParams.get("proveedor") || "todos") + "-" + (u.searchParams.get("dias") || "7");
+      return original(BASE + "/api/" + ruta + ".json");
+    }
+    return original(url, op);
+  };
+  // Los botones que escriben se interceptan antes que su propio manejador.
+  window.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest("#actualizar, #act1, #p-probar, [data-prov]");
+    if (!b) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    aviso(AVISO);
+  }, true);
+  function aviso(texto) {
+    let t = document.getElementById("aviso-estatico");
+    if (!t) { t = document.createElement("div"); t.id = "aviso-estatico"; document.body.append(t); }
+    t.textContent = texto; t.className = "visible";
+    clearTimeout(t._t); t._t = setTimeout(() => t.className = "", 4000);
+  }
+  document.addEventListener("DOMContentLoaded", () => {
+    const cinta = document.createElement("div");
+    cinta.id = "cinta-estatica";
+    cinta.textContent = "Versión publicada de la demo · datos congelados el " + FECHA + " · leer fuentes, actualizar y agregar proveedores requiere el servidor";
+    document.body.prepend(cinta);
+  });
+  const css = document.createElement("style");
+  css.textContent = "#cinta-estatica{background:#000;color:#fff;text-align:center;font:11px/1.4 system-ui,sans-serif;letter-spacing:.04em;padding:6px 12px}" +
+    "#aviso-estatico{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:min(560px,calc(100% - 32px));background:#000;color:#fff;" +
+    "font:12px/1.4 system-ui,sans-serif;padding:12px 16px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:99}#aviso-estatico.visible{opacity:1}";
+  document.head.append(css);
+})();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catálogo de colecciones · Opción 1</title>
+<link rel="stylesheet" href="/demo-colecciones/estilos.css">
+</head>
+<body>
+<div id="app"></div>
+<script>
+  const fecha = s => s ? new Date(s).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+  let baseInicial = "";
+  window.TIENDA = {
+    api: "/api/op1/catalogo",
+    opcion: "Opción 1 · MCP",
+    aviso: "<b>Se actualiza sola</b> cada 3 días con lo nuevo de los proveedores",
+    pie: "Demo Orquestia · Opción 1 · catálogo mantenido por un servidor MCP conectado a Claude",
+    campoFecha: "publicado_en_fuente",
+    // Nuevo: publicado por la fuente en los últimos 14 días, o visto por primera vez después de la carga inicial
+    esNuevo: p => (p.publicado_en_fuente || "") >= new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10)
+      || ((p.primera_vez || "") > baseInicial && (p.primera_vez || "") >= new Date(Date.now() - 3 * 864e5).toISOString()),
+    alCargar: (d, ps) => {
+      baseInicial = ps.reduce((m, p) => (p.primera_vez && p.primera_vez < m ? p.primera_vez : m), "9999");
+      const c = d.ultima_corrida;
+      document.getElementById("pie").innerHTML += `<br>Última actualización: ${fecha(c && c.fecha)} · Próxima automática: ${fecha(d.programacion.proxima)}`;
+    },
+    heroDetalle: d => `actualizado ${fecha(d.ultima_corrida && d.ultima_corrida.fecha)}`,
+  };
+</script>
+<script src="/demo-colecciones/tienda.js"></script>
+</body>
+</html>

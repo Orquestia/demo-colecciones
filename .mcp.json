@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "catalogo-colecciones": {
+      "command": "python3",
+      "args": ["/Users/karlap/Documents/Orquestia/Cuentas de cobro/demo-colecciones/mcp_servidor.py"]
+    }
+  }
+}

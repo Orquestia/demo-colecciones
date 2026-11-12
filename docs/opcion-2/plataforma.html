@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="es">
+<head>
+<script>
+/* Versión publicada (estática) de la demo: las lecturas salen de api/*.json y las acciones se desactivan. */
+(function () {
+  const BASE = "/demo-colecciones", FECHA = "11/11/2026";
+  const original = window.fetch.bind(window);
+  const AVISO = "En la versión publicada esta acción está desactivada: necesita el servidor de la demo (python3 servidor.py).";
+  window.fetch = function (url, op) {
+    if (typeof url === "string" && url.startsWith("/api/")) {
+      if (op && op.method && op.method !== "GET")
+        return Promise.resolve(new Response(JSON.stringify({ error: AVISO }), { status: 400, headers: { "Content-Type": "application/json" } }));
+      const u = new URL(url, location.origin);
+      let ruta = u.pathname.replace(/^\/api\//, "");
+      if (ruta === "op2/dashboard") ruta += "-" + (u.searchParams.get("proveedor") || "todos") + "-" + (u.searchParams.get("dias") || "7");
+      return original(BASE + "/api/" + ruta + ".json");
+    }
+    return original(url, op);
+  };
+  // Los botones que escriben se interceptan antes que su propio manejador.
+  window.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest("#actualizar, #act1, #p-probar, [data-prov]");
+    if (!b) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    aviso(AVISO);
+  }, true);
+  function aviso(texto) {
+    let t = document.getElementById("aviso-estatico");
+    if (!t) { t = document.createElement("div"); t.id = "aviso-estatico"; document.body.append(t); }
+    t.textContent = texto; t.className = "visible";
+    clearTimeout(t._t); t._t = setTimeout(() => t.className = "", 4000);
+  }
+  document.addEventListener("DOMContentLoaded", () => {
+    const cinta = document.createElement("div");
+    cinta.id = "cinta-estatica";
+    cinta.textContent = "Versión publicada de la demo · datos congelados el " + FECHA + " · leer fuentes, actualizar y agregar proveedores requiere el servidor";
+    document.body.prepend(cinta);
+  });
+  const css = document.createElement("style");
+  css.textContent = "#cinta-estatica{background:#000;color:#fff;text-align:center;font:11px/1.4 system-ui,sans-serif;letter-spacing:.04em;padding:6px 12px}" +
+    "#aviso-estatico{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:min(560px,calc(100% - 32px));background:#000;color:#fff;" +
+    "font:12px/1.4 system-ui,sans-serif;padding:12px 16px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:99}#aviso-estatico.visible{opacity:1}";
+  document.head.append(css);
+})();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plataforma central · Opción 2</title>
+<link rel="stylesheet" href="/demo-colecciones/estilos.css">
+<style>
+  .simulado { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border: 1px solid rgb(255 255 255 / .5); padding: 4px 8px; white-space: nowrap; }
+  .app { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: 210px 1fr; min-height: calc(100vh - 64px); }
+  .lado { border-right: 1px solid var(--line); padding: 24px 0; }
+  .lado button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 10px 24px; font: inherit; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); cursor: pointer; border-left: 2px solid transparent; }
+  .lado button[aria-current="true"] { color: #000; font-weight: 700; border-color: #000; background: var(--soft); }
+  .lado .fase2 { padding: 22px 24px 6px; font-size: 10px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+  .lado .off { display: flex; justify-content: space-between; padding: 8px 24px; font-size: 12px; color: #b3b3b3; text-transform: uppercase; letter-spacing: .06em; }
+  .lado .off small { font-size: 9px; border: 1px solid #ddd; padding: 1px 5px; }
+  .vista { padding: 28px 32px 96px; min-width: 0; margin: 0; max-width: none; }  /* sin márgenes automáticos: en la rejilla anularían el estiramiento */
+  .vista h1 { font-size: 22px; font-weight: 300; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 6px; }
+  .accion { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin: 24px 0; }
+  .agentes { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .agente { border: 1px solid var(--line); padding: 14px 16px; }
+  .agente b { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .agente .est { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .agente .num { font-size: 26px; font-weight: 300; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .barra { height: 3px; background: var(--soft); margin-top: 10px; overflow: hidden; }
+  .barra i { display: block; height: 100%; background: #000; width: 30%; animation: corre 1.2s infinite ease-in-out; }
+  .agente.ok .barra i, .agente.alerta .barra i, .agente.esperando .barra i { animation: none; width: 100%; }
+  .agente.alerta .barra i { background: var(--bad); }
+  .agente.esperando .barra i { background: var(--line); }
+  @keyframes corre { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+  .chip { display: inline-block; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 6px; border: 1px solid var(--line); color: var(--muted); margin: 2px 2px 0 0; }
+  .chip.ia { border-color: #000; color: #000; font-weight: 700; }
+  .chip.ret { background: var(--bad-soft); border-color: var(--bad-soft); color: var(--bad); }
+  .chip.pub { background: #000; color: #fff; border-color: #000; }
+  .grid-adm { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 24px 16px; }
+  .grid-adm .card { text-align: left; }
+  .grid-adm .body { align-items: flex-start; }
+  .prov { border: 1px solid var(--line); padding: 16px 18px; display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; margin-bottom: 10px; }
+  .prov .url { font-size: 11px; color: var(--muted); word-break: break-all; }
+  .nuevo-prov { border: 1px solid #000; padding: 20px; margin-top: 28px; }
+  .nuevo-prov .fila { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .nuevo-prov label { display: flex; flex-direction: column; gap: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); flex: 1 1 220px; }
+  .nuevo-prov input { font: inherit; font-size: 13px; padding: 8px 2px; border: 0; border-bottom: 1px solid var(--line); outline: none; }
+  .nuevo-prov input:focus { border-color: #000; }
+  .muestra { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; margin-top: 16px; }
+  .muestra img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff; }
+  .muestra div { font-size: 11px; }
+  td .chip { margin: 0; }
+  /* Dashboard */
+  .dash-filtros { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; margin: 18px 0 8px; }
+  .dash-filtros label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+  .dash-filtros select { font: inherit; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; border: 0; border-bottom: 1px solid var(--line); padding: 6px 2px; background: transparent; cursor: pointer; }
+  .dash-cuerpo { transition: opacity .2s; }
+  .dash-heroe { display: flex; flex-direction: column; gap: 4px; margin: 22px 0 6px; }
+  .dash-heroe-n { font-size: 64px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .dash-heroe-t { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+  .dash-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dash-kpis .kpi:nth-child(3n) { border-right: 0; }
+  .dash-kpis .kpi:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
+  .kpi-det { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .dash-card { border: 1px solid var(--line); padding: 18px 20px 20px; min-width: 0; }
+  .dash-ancha { margin-top: 16px; }
+  .dash-cab { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+  .dash-cab h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+  .dash-cab .sub { margin-top: 3px; font-size: 11px; }
+  .dash-tabla-btn { background: none; border: 0; font: inherit; font-size: 11px; text-decoration: underline; color: var(--muted); cursor: pointer; white-space: nowrap; padding: 0; }
+  .dash-tabla { width: 100%; border-collapse: collapse; }
+  .dash-tabla th, .dash-tabla td { padding: 8px 10px; font-size: 12px; }
+  .dash-tabla td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .hbarras { display: flex; flex-direction: column; gap: 2px; }
+  .hb-fila { display: grid; grid-template-columns: minmax(80px, 38%) minmax(0, 1fr); gap: 12px; align-items: center; padding: 4px 0; outline: none; cursor: default; }
+  .hb-fila:hover .hb-barra, .hb-fila:focus .hb-barra { background: #555; }
+  .hb-fila:focus-visible { box-shadow: 0 0 0 2px #000; }
+  .hb-nombre { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hb-pista { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
+  .hb-barra { height: 14px; background: #000; border-radius: 0 4px 4px 0; flex: none; max-width: calc(100% - 64px); }
+  .hb-valor { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
+  .vcols { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; height: 220px; align-items: stretch; border-bottom: 1px solid var(--line); }
+  .vc-col { display: flex; flex-direction: column; outline: none; }
+  .vc-area { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 0 8%; }
+  .vc-barra { width: 100%; max-width: 24px; background: #000; border-radius: 4px 4px 0 0; }
+  .vc-col:hover .vc-barra, .vc-col:focus .vc-barra { background: #555; }
+  .vc-col:focus-visible { box-shadow: 0 0 0 2px #000; }
+  .vc-valor { font-size: 11px; font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+  .vc-nombre { font-size: 10px; color: var(--muted); text-align: center; padding-top: 6px; height: 30px; transform: translateY(32px); margin-top: -30px; }
+  .vcols { margin-bottom: 34px; }
+  .dash-tip { position: absolute; z-index: 40; background: #fff; border: 1px solid #000; padding: 6px 10px; pointer-events: none; display: flex; flex-direction: column; font-size: 11px; box-shadow: 0 4px 14px rgb(0 0 0 / .12); }
+  .dash-tip b { font-size: 14px; font-variant-numeric: tabular-nums; }
+  .dash-tip span { color: var(--muted); }
+  .dash-scroll { overflow-x: auto; }
+  @media (max-width: 1000px) { .dash-grid { grid-template-columns: minmax(0, 1fr); } .dash-heroe-n { font-size: 48px; } }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: minmax(0, 1fr) !important; }
+    .lado, .vista { min-width: 0; }
+    .dash-kpis { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .dash-kpis .kpi { border-right: 0 !important; border-bottom: 1px solid var(--line); }
+    .dash-kpis .kpi:nth-child(odd) { border-right: 1px solid var(--line) !important; }
+    .dash-kpis .kpi b { font-size: 22px; }
+    .simulado { white-space: normal; max-width: 120px; line-height: 1.25; font-size: 9px; }
+    .top-acc a[target] { display: none; }
+    .dash-card { padding: 14px; }
+  }
+  @media (max-width: 860px) { .app { grid-template-columns: 1fr; } .lado { border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 0; display: flex; overflow-x: auto; } .lado button { width: auto; white-space: nowrap; border-left: 0; border-bottom: 2px solid transparent; } .lado .fase2, .lado .off { display: none; } .vista { padding: 20px 16px 96px; } }
+</style>
+</head>
+<body>
+<div class="top"><div class="top-in">
+  <a class="marca" href="plataforma.html">Plataforma<small>Central</small></a>
+  <nav class="nav"></nav>
+  <div class="top-acc"><span class="simulado">Núcleo simulado · en producción: Odoo 18</span><a href="./" target="_blank">Ver vitrina ↗</a><a href="/demo-colecciones/">Inicio</a></div>
+</div></div>
+<div class="app">
+  <aside class="lado" id="lado">
+    <button data-v="resumen" aria-current="true">Resumen</button>
+    <button data-v="dashboard">Dashboard</button>
+    <button data-v="catalogo">Catálogo</button>
+    <button data-v="proveedores">Proveedores</button>
+    <button data-v="registro">Registro</button>
+    <div class="fase2">Fase 2 · por cotizar</div>
+    <div class="off">Contabilidad <small>M7</small></div>
+    <div class="off">CRM <small>M8</small></div>
+    <div class="off">Inventario <small>M9</small></div>
+  </aside>
+  <main class="vista">
+    <section id="v-resumen">
+      <h1>Resumen</h1>
+      <p class="sub" id="ultima"></p>
+      <div class="kpis" id="kpis"></div>
+      <div class="accion">
+        <button class="btn btn-primary" id="actualizar">Actualizar ahora</button>
+        <span class="sub" id="estado-act">Lanza los agentes en paralelo: leen cada proveedor, completan categoría y marca, y publican lo que cumple las reglas.</span>
+      </div>
+      <div class="agentes" id="agentes"></div>
+      <h2>Cómo se clasificó el catálogo</h2>
+      <div class="kpis" id="origen"></div>
+      <div class="note">Reglas de publicación automática: un producto sale a la vitrina solo si tiene <b>precio</b>, <b>foto</b> y <b>categoría</b>. Lo que no cumple queda retenido con su motivo. Las fotos de Drive no traen precio, por eso quedan retenidas.</div>
+    </section>
+
+    <section id="v-dashboard" hidden>
+      <h1>Dashboard</h1>
+      <p class="sub">Indicadores del catálogo. Los filtros acotan todo el tablero.</p>
+      <div class="dash-filtros">
+        <label>Proveedor <select id="d-prov"><option value="">Todos</option></select></label>
+        <label>Período <select id="d-dias"><option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option></select></label>
+      </div>
+      <div class="dash-cuerpo"></div>
+    </section>
+
+    <section id="v-catalogo" hidden>
+      <h1>Catálogo</h1>
+      <div class="filters">
+        <input type="search" id="c-q" placeholder="Buscar por nombre o marca">
+        <select id="c-estado"><option value="">Todos los estados</option><option value="publicado">Publicados</option><option value="retenido">Retenidos</option><option value="retirado">Ya no aparecen</option></select>
+        <select id="c-prov"><option value="">Todos los proveedores</option></select>
+        <select id="c-origen"><option value="">Cualquier origen de categoría</option><option value="fuente">Categoría de la fuente</option><option value="nombre">Por reglas del nombre</option><option value="ia">Por el agente IA</option></select>
+        <span class="count" id="c-n"></span>
+      </div>
+      <div class="grid-adm" id="c-grid"></div>
+      <button class="btn more" id="c-more">Ver más</button>
+    </section>
+
+    <section id="v-proveedores" hidden>
+      <h1>Proveedores</h1>
+      <p class="sub">Cada proveedor activo se lee en cada actualización. Pausar uno conserva sus productos tal como están.</p>
+      <div id="provs" style="margin-top:20px"></div>
+      <div class="nuevo-prov">
+        <h2 style="margin-top:0">Agregar proveedor</h2>
+        <p class="sub">Pega el enlace de la tienda o de la carpeta de Drive. La plataforma detecta cómo está hecha y hace una lectura de prueba antes de activarla.</p>
+        <div class="fila" style="margin-top:14px">
+          <label>Nombre<input id="p-nombre" placeholder="Ej. Tienda nueva"></label>
+          <label style="flex:3 1 320px">Enlace<input id="p-url" placeholder="https://… o enlace de carpeta de Drive"></label>
+          <button class="btn" id="p-probar">Probar lectura</button>
+        </div>
+        <div id="p-res"></div>
+      </div>
+    </section>
+
+    <section id="v-registro" hidden>
+      <h1>Registro</h1>
+      <p class="sub">Lo que hizo el agente: publicaciones, retenciones, cambios de precio, productos retirados y clasificaciones con IA.</p>
+      <div class="tablewrap" style="margin-top:20px"><table id="reg"></table></div>
+    </section>
+  </main>
+</div>
+<script src="dashboard.js"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const cop = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
+  const fecha = s => s ? new Date(s).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+  const num = n => (n || 0).toLocaleString("es-CO");
+  const ORIGEN = { fuente: "Fuente", nombre: "Reglas", ia: "Agente IA", regla: "Reglas" };
+  let T = null, provNombre = {}, cat = [], catVis = 48, sondeo = null;
+
+  async function json(url, op) { const r = await fetch(url, op); const d = await r.json(); if (!r.ok) throw new Error(d.error || r.status); return d; }
+  const post = (url, cuerpo) => json(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo || {}) });
+
+  async function tablero() {
+    T = await json("/api/op2/tablero");
+    provNombre = Object.fromEntries(T.proveedores.map(p => [p.clave, p.nombre]));
+    const e = T.estados;
+    $("kpis").innerHTML = [[e.publicado, "publicados en la vitrina"], [e.retenido, "retenidos por reglas"], [e.retirado, "ya no aparecen"],
+      [T.proveedores.filter(p => p.activo).length, "proveedores activos"]].map(([n, t]) => `<div class="kpi"><b>${num(n)}</b><span>${t}</span></div>`).join("");
+    const o = T.origen_categoria;
+    $("origen").innerHTML = [[o.fuente, "categoría publicada por la fuente"], [o.nombre, "por reglas sobre el nombre"], [o.ia, "resueltas por el agente IA"], [o.sin, "sin categoría"]]
+      .map(([n, t]) => `<div class="kpi"><b>${num(n)}</b><span>${t}</span></div>`).join("");
+    const u = T.ultima_corrida;
+    $("ultima").textContent = u ? `Última actualización: ${fecha(u.fin)}` : "Aún no se ha corrido el agente desde la plataforma (datos de la carga inicial).";
+    pintarAgentes();
+    const activo = T.progreso && T.progreso.activo;
+    $("actualizar").disabled = activo;
+    $("actualizar").textContent = activo ? "Actualizando…" : "Actualizar ahora";
+    if (activo && !sondeo) sondeo = setInterval(tablero, 1500);
+    if (!activo && sondeo) { clearInterval(sondeo); sondeo = null; cargarCatalogo(); }
+  }
+
+  function pintarAgentes() {
+    const p = T.progreso || {};
+    const fuentes = p.fuentes || Object.fromEntries(T.proveedores.filter(x => x.activo).map(x => [x.clave, x.ultimo_estado ? { ...x.ultimo_estado, nombre: x.nombre } : { nombre: x.nombre, estado: "esperando", etapa: "sin leer", n: 0 }]));
+    let html = Object.values(fuentes).map(f => `<div class="agente ${esc(f.estado)}"><b>${esc(f.nombre)}</b>
+      <div class="est">${f.estado === "leyendo" ? "Leyendo · " + esc(f.etapa) : f.estado === "ok" ? `Listo en ${f.segundos ?? "—"} s` : f.estado === "alerta" ? esc(f.alerta || "Con alerta") : esc(f.etapa || "En cola")}</div>
+      <div class="num">${num(f.n)}</div><div class="barra"><i></i></div></div>`).join("");
+    if (p.ia) {
+      const ia = p.ia, est = ia.estado === "trabajando" ? "leyendo" : ia.estado === "listo" ? "ok" : ia.estado === "error" ? "alerta" : "esperando";
+      html += `<div class="agente ${est}"><b>Agente IA · Claude</b><div class="est">${ia.estado === "trabajando" ? "Clasificando categoría y marca" : ia.estado === "listo" ? "Clasificación lista" : esc(ia.detalle || ia.estado)}</div>
+        <div class="num">${num(ia.hechos)} / ${num(ia.total)}</div><div class="barra"><i></i></div></div>`;
+    }
+    $("agentes").innerHTML = html;
+    if (p.activo) $("estado-act").textContent = `Agentes trabajando en paralelo desde ${fecha(p.inicio)}…`;
+    else if (p.fin) $("estado-act").textContent = p.error ? `Error: ${p.error}` : `Actualización terminada ${fecha(p.fin)}.`;
+  }
+
+  $("actualizar").onclick = async () => { await post("/api/op2/actualizar"); tablero(); };
+
+  // ---- Catálogo ----
+  async function cargarCatalogo() {
+    cat = (await json("/api/op2/productos")).productos;
+    const sel = $("c-prov");
+    if (sel.options.length === 1) Object.entries(provNombre).forEach(([k, n]) => sel.add(new Option(n, k)));
+    filtrarCat();
+  }
+  function filtrarCat(reiniciar = true) {
+    const q = $("c-q").value.toLowerCase(), es = $("c-estado").value, pr = $("c-prov").value, or = $("c-origen").value;
+    const l = cat.filter(p => (!es || p.estado === es) && (!pr || p.proveedor === pr) && (!or || p.cat_origen === or) &&
+      (!q || `${p.nombre} ${p.marca || ""}`.toLowerCase().includes(q)));
+    if (reiniciar) catVis = 48;
+    $("c-n").textContent = `${num(l.length)} productos`;
+    $("c-grid").innerHTML = l.slice(0, catVis).map(p => `<div class="card"><div class="img">${p.imagenes[0] ? `<img loading="lazy" src="${esc(p.imagenes[0])}" alt="" referrerpolicy="no-referrer">` : ""}</div>
+      <div class="body"><span class="src">${esc(provNombre[p.proveedor] || p.proveedor)}</span><span class="name">${esc(p.nombre)}</span>
+      <span class="meta">${esc(p.categoria || "Sin categoría")} · ${esc(p.marca || "Sin marca")}</span>
+      <span class="price">${p.precio ? cop.format(p.precio) : "Sin precio"}</span>
+      <div>${p.estado === "publicado" ? '<span class="chip pub">Publicado</span>' : p.estado === "retenido" ? `<span class="chip ret">${esc(p.motivo)}</span>` : '<span class="chip">Ya no aparece</span>'}
+      ${p.cat_origen ? `<span class="chip ${p.cat_origen === "ia" ? "ia" : ""}">Categoría: ${ORIGEN[p.cat_origen]}</span>` : ""}
+      ${p.marca_origen === "ia" ? '<span class="chip ia">Marca: Agente IA</span>' : ""}</div></div></div>`).join("") || '<div class="empty">Sin productos con esos filtros</div>';
+    $("c-more").hidden = catVis >= l.length;
+  }
+  ["c-q", "c-estado", "c-prov", "c-origen"].forEach(id => $(id).addEventListener("input", () => filtrarCat()));
+  $("c-more").onclick = () => { catVis += 48; filtrarCat(false); };
+
+  // ---- Proveedores ----
+  function pintarProveedores() {
+    $("provs").innerHTML = T.proveedores.map(p => {
+      const c = p.conteo || {};
+      return `<div class="prov"><div><b style="font-size:13px;text-transform:uppercase;letter-spacing:.06em">${esc(p.nombre)}</b>
+        <span class="chip">${esc(p.tipo)}</span>${p.activo ? "" : '<span class="chip ret">Pausado</span>'}
+        <div class="url">${esc(p.url)}</div>
+        <div class="sub" style="margin-top:6px">${num(c.publicado)} publicados · ${num(c.retenido)} retenidos · ${num(c.retirado)} ya no aparecen · última lectura ${fecha(p.ultima_lectura)}</div></div>
+        <div><button class="btn ${p.activo ? "btn-bad" : "btn-ok"}" data-prov="${esc(p.clave)}" data-activo="${p.activo ? 0 : 1}">${p.activo ? "Pausar" : "Activar"}</button></div></div>`;
+    }).join("");
+  }
+  $("provs").onclick = async e => {
+    const b = e.target.closest("[data-prov]"); if (!b) return;
+    await post("/api/op2/proveedores/activo", { clave: b.dataset.prov, activo: +b.dataset.activo });
+    await tablero(); pintarProveedores();
+  };
+  let prueba = null;
+  $("p-probar").onclick = async () => {
+    const url = $("p-url").value.trim(); if (!url) return;
+    $("p-res").innerHTML = '<p class="sub" style="margin-top:14px">Detectando cómo está hecha la página y leyendo una muestra…</p>';
+    try {
+      prueba = await post("/api/op2/proveedores/probar", { url });
+      $("p-res").innerHTML = `<div class="note" style="margin-top:16px">${prueba.tipo ? "✓ " : "✕ "}${esc(prueba.explicacion)}</div>` +
+        (prueba.muestra.length ? `<div class="muestra">${prueba.muestra.map(p => `<div>${p.imagenes && p.imagenes[0] ? `<img src="${esc(p.imagenes[0])}" referrerpolicy="no-referrer" alt="">` : ""}
+          <div><b>${esc(p.nombre)}</b></div><div class="sub">${esc(p.categoria || "Sin categoría")}${p.precio ? " · " + cop.format(p.precio) : ""}</div></div>`).join("")}</div>
+          <button class="btn btn-primary" id="p-activar" style="margin-top:18px">Agregar y activar proveedor</button>` : "");
+      const act = $("p-activar");
+      if (act) act.onclick = async () => {
+        const nombre = $("p-nombre").value.trim() || new URL(url).hostname;
+        try {
+          await post("/api/op2/proveedores", { nombre, url, tipo: prueba.tipo });
+          $("p-res").innerHTML = `<div class="note" style="margin-top:16px">✓ ${esc(nombre)} quedó activo. Se leerá en la próxima actualización.</div>`;
+          $("p-nombre").value = $("p-url").value = "";
+          await tablero(); pintarProveedores();
+        } catch (err) { $("p-res").insertAdjacentHTML("beforeend", `<div class="note">✕ ${esc(err.message)}</div>`); }
+      };
+    } catch (err) { $("p-res").innerHTML = `<div class="note" style="margin-top:16px">✕ ${esc(err.message)}</div>`; }
+  };
+
+  // ---- Registro ----
+  async function cargarRegistro() {
+    const ev = (await json("/api/op2/registro")).eventos;
+    $("reg").innerHTML = "<tr><th>Fecha</th><th>Acción</th><th>Producto</th><th>Proveedor</th><th>Detalle</th></tr>" +
+      ev.map(e => `<tr><td>${fecha(e.fecha)}</td><td><span class="chip ${e.accion === "agente" ? "ia" : e.accion === "publicado" ? "pub" : e.accion === "retenido" ? "ret" : ""}">${esc(e.accion)}</span></td>
+        <td>${esc(e.nombre)}</td><td>${esc(provNombre[e.proveedor] || e.proveedor)}</td><td>${esc(e.detalle)}</td></tr>`).join("");
+  }
+
+  // ---- Navegación ----
+  $("lado").onclick = e => {
+    const b = e.target.closest("[data-v]"); if (!b) return;
+    $("lado").querySelectorAll("[data-v]").forEach(x => x.setAttribute("aria-current", x === b));
+    ["resumen", "dashboard", "catalogo", "proveedores", "registro"].forEach(v => $("v-" + v).hidden = v !== b.dataset.v);
+    if (b.dataset.v === "dashboard") Dashboard.iniciar($("v-dashboard"), T.proveedores);
+    if (b.dataset.v === "proveedores") pintarProveedores();
+    if (b.dataset.v === "registro") cargarRegistro();
+  };
+
+  tablero().then(cargarCatalogo);
+})();
+</script>
+</body>
+</html>

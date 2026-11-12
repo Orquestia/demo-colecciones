@@ -1,0 +1,5 @@
+__pycache__/
+.DS_Store
+data/.actualizando
+# Panel de aprobación manual anterior (ya no lo usa ninguna opción)
+data/aprobaciones.json
